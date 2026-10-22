@@ -1,0 +1,12 @@
+{
+  "background_color": "#ffffff",
+  "dir": "ltr",
+  "display": "standalone",
+  "name": "UluyolPDF",
+  "orientation": "any",
+  "scope": "/",
+  "short_name": "UluyolPDF",
+  "start_url": "/https://oktayuluyol1998-afk.github.io/pdf_goruntuleyici/",
+  "theme_color": "#ffffff",
+  "lang": "tr"
+}
