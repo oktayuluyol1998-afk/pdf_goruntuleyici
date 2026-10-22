@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="tr" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Uluyol PDF</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'media',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: { 50: '#eef2ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- PDF.js kütüphanesi -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+    <!-- FontAwesome ikonları -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', system-ui, -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+        @media (prefers-color-scheme: dark) {
+            ::-webkit-scrollbar-thumb { background: #475569; }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 h-full flex flex-col antialiased selection:bg-brand-500 selection:text-white">
+
+    <!-- Üst Başlık ve Kontrol Paneli -->
+    <header class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between shrink-0 shadow-sm z-20">
+        <div class="flex items-center space-x-3 truncate">
+            <div class="bg-brand-500 text-white p-2.5 rounded-2xl shadow-md shadow-brand-500/20 flex items-center justify-center shrink-0">
+                <i class="fa-solid fa-file-pdf text-lg"></i>
+            </div>
+            <div class="truncate">
+                <h1 id="file-title" class="font-bold text-sm sm:text-base truncate">PDF Dosyası Seçilmedi</h1>
+                <p id="file-subtitle" class="text-[11px] text-slate-500 dark:text-slate-400">Her uygulama ile uyumlu</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-2 shrink-0">
+            <!-- Dosya Seç Butonu -->
+            <label class="cursor-pointer bg-brand-50 hover:bg-brand-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-brand-600 dark:text-brand-400 px-3.5 py-2 rounded-xl transition flex items-center justify-center text-xs sm:text-sm font-semibold border border-brand-200 dark:border-slate-700">
+                <i class="fa-solid fa-folder-open text-base sm:mr-1.5"></i>
+                <span class="hidden sm:inline">Dosya Aç</span>
+                <input type="file" id="pdf-file-input" accept=".pdf,application/pdf" class="hidden">
+            </label>
+        </div>
+    </header>
+
+    <!-- Ana Çalışma Alanı -->
+    <main class="flex-1 flex flex-col relative overflow-hidden">
+
+        <!-- Dosya Seçilmediğinde Gösterilen Ekran -->
+        <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10">
+            <div id="drop-zone" class="w-full max-w-sm border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-brand-500 dark:hover:border-brand-500 rounded-3xl p-8 transition flex flex-col items-center bg-white/60 dark:bg-slate-900/60 backdrop-blur-md cursor-pointer shadow-lg shadow-slate-200/50 dark:shadow-none">
+                <div class="w-16 h-16 bg-brand-50 dark:bg-slate-800 text-brand-500 rounded-2xl flex items-center justify-center text-2xl mb-4 shadow-inner">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                </div>
+                <h2 class="text-base font-bold mb-1">PDF Dosyası Yükleyin</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mb-6">Chrome'dan indirdiğiniz veya WhatsApp/Telegram'dan aldığınız PDF'i seçin.</p>
+                <label class="w-full py-3 px-4 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-medium shadow-lg shadow-brand-600/25 transition cursor-pointer text-center block text-sm">
+                    <span>Dosyaya Göz At / Seç</span>
+                    <input type="file" id="pdf-file-input-hero" accept=".pdf,application/pdf" class="hidden">
+                </label>
+            </div>
+            <!-- Özellik Rozetleri -->
+         </div>
+
+        <!-- PDF Görüntüleyici ve Araç Paneli (Dosya yüklendikten sonra aktif olur) -->
+        <div id="viewer-container" class="hidden flex-1 flex flex-col h-full overflow-hidden">
+            
+            <!-- Alt Araç Çubuğu (Sayfa Değiştirme, Yakınlaştırma ve Paylaşım Araçları) -->
+            <div class="bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-3 py-2 flex items-center justify-between shrink-0 overflow-x-auto gap-2 z-10">
+                
+                <!-- Sayfa İlerleme Kontrolleri -->
+                <div class="flex items-center space-x-1 shrink-0 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl">
+                    <button id="prev-page" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white dark:hover:bg-slate-700 transition disabled:opacity-30 shadow-xs" title="Önceki Sayfa">
+                        <i class="fa-solid fa-chevron-left text-xs"></i>
+                    </button>
+                    <div class="text-xs font-semibold px-2 flex items-center space-x-1">
+                        <input type="number" id="page-num-input" value="1" min="1" class="w-10 text-center bg-white dark:bg-slate-900 rounded py-1 text-xs border border-slate-200 dark:border-slate-700 outline-none font-bold">
+                        <span class="text-slate-400">/</span>
+                        <span id="page-count" class="text-slate-700 dark:text-slate-200 font-bold">1</span>
+                    </div>
+                    <button id="next-page" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white dark:hover:bg-slate-700 transition disabled:opacity-30 shadow-xs" title="Sonraki Sayfa">
+                        <i class="fa-solid fa-chevron-right text-xs"></i>
+                    </button>
+                </div>
+
+                <!-- Yakınlaştırma (Zoom) Kontrolleri -->
+                <div class="flex items-center space-x-1 shrink-0 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl">
+                    <button id="zoom-out" class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white dark:hover:bg-slate-700 transition text-xs" title="Uzaklaştır">
+                        <i class="fa-solid fa-minus"></i>
+                    </button>
+                    <span id="zoom-level" class="text-xs font-semibold w-11 text-center text-slate-700 dark:text-slate-200">100%</span>
+                    <button id="zoom-in" class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white dark:hover:bg-slate-700 transition text-xs" title="Yakınlaştır">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+                </div>
+
+                <!-- Paylaşım Butonları -->
+                <div class="flex items-center space-x-1.5 shrink-0">
+                    <button id="share-page-jpg" class="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white px-3 py-2 rounded-xl text-xs font-semibold transition flex items-center shadow-sm shadow-emerald-600/20">
+                        <i class="fa-solid fa-image sm:mr-1.5"></i> <span class="hidden sm:inline">JPG Paylaş</span>
+                    </button>
+                    <button id="share-original-pdf" class="bg-brand-600 hover:bg-brand-700 active:scale-95 text-white px-3 py-2 rounded-xl text-xs font-semibold transition flex items-center shadow-sm shadow-brand-600/20">
+                        <i class="fa-solid fa-share-nodes sm:mr-1.5"></i> <span class="hidden sm:inline">PDF Paylaş</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- PDF Sayfasının Gösterildiği Canvas Alanı -->
+            <div id="canvas-scroll-area" class="flex-1 overflow-auto p-4 flex items-center justify-center relative bg-slate-200/60 dark:bg-slate-950">
+                <div id="canvas-wrapper" class="relative shadow-2xl rounded-xl overflow-hidden bg-white transition-transform duration-150">
+                    <canvas id="pdf-canvas" class="block max-w-full"></canvas>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Bilgilendirme Modalı (Alert Alternatifi) -->
+    <div id="message-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-xs w-full p-6 shadow-2xl text-center">
+            <div id="modal-icon" class="w-12 h-12 rounded-full bg-brand-50 dark:bg-slate-800 text-brand-500 flex items-center justify-center text-xl mx-auto mb-4">
+                <i class="fa-solid fa-info"></i>
+            </div>
+            <h3 id="modal-title" class="font-bold text-base mb-2">Bildirim</h3>
+            <p id="modal-desc" class="text-xs text-slate-500 dark:text-slate-400 mb-6 leading-relaxed">İşlem başarıyla tamamlandı.</p>
+            <button id="modal-close" class="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-xl font-semibold text-xs transition shadow-md shadow-brand-600/25">Tamam</button>
+        </div>
+    </div>
+
+    <!-- Yükleniyor Ekranı Göstergesi -->
+    <div id="loading-overlay" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center hidden">
+        <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-2xl flex items-center space-x-4 border border-slate-200 dark:border-slate-800">
+            <div class="w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+            <span id="loading-text" class="text-xs font-semibold">PDF Yükleniyor...</span>
+        </div>
+    </div>
+
+    <!-- Uygulama Mantığı ve PDF İşleme Betiği -->
+    <script>
+        let pdfDoc = null;
+        let pageNum = 1;
+        let pageRendering = false;
+        let pageNumPending = null;
+        let scale = 1.25;
+        let currentFile = null;
+        let currentFileBytes = null;
+
+        const canvas = document.getElementById('pdf-canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Güvenli Bildirim Kutusu
+        function showMessage(title, desc, isError = false) {
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-desc').textContent = desc;
+            const iconContainer = document.getElementById('modal-icon');
+            if (isError) {
+                iconContainer.className = "w-12 h-12 rounded-full bg-rose-50 dark:bg-rose-950/50 text-rose-500 flex items-center justify-center text-xl mx-auto mb-4";
+                iconContainer.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i>';
+            } else {
+                iconContainer.className = "w-12 h-12 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-500 flex items-center justify-center text-xl mx-auto mb-4";
+                iconContainer.innerHTML = '<i class="fa-solid fa-check"></i>';
+            }
+            document.getElementById('message-modal').classList.remove('hidden');
+        }
+
+        document.getElementById('modal-close').addEventListener('click', () => {
+            document.getElementById('message-modal').classList.add('hidden');
+        });
+
+        function showLoading(text = "İşleniyor...") {
+            document.getElementById('loading-text').textContent = text;
+            document.getElementById('loading-overlay').classList.remove('hidden');
+        }
+
+        function hideLoading() {
+            document.getElementById('loading-overlay').classList.add('hidden');
+        }
+
+        // Dosya İşleme Fonksiyonu
+        function handleFile(file) {
+            if (!file) return;
+            if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+                showMessage("Geçersiz Dosya", "Lütfen geçerli bir PDF dosyası seçin.", true);
+                return;
+            }
+
+            currentFile = file;
+            showLoading("PDF Yükleniyor...");
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                currentFileBytes = e.target.result;
+                loadPDFData(currentFileBytes, file.name);
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function loadPDFData(data, fileName) {
+            pdfjsLib.getDocument({ data: data }).promise.then(function(pdfDoc_) {
+                pdfDoc = pdfDoc_;
+                document.getElementById('page-count').textContent = pdfDoc.numPages;
+                document.getElementById('page-num-input').max = pdfDoc.numPages;
+                pageNum = 1;
+
+                // Arayüz Değişikliği
+                document.getElementById('file-title').textContent = fileName;
+                document.getElementById('file-subtitle').textContent = `${pdfDoc.numPages} Sayfa • ${Math.round(data.byteLength / 1024)} KB`;
+                document.getElementById('empty-state').classList.add('hidden');
+                document.getElementById('viewer-container').classList.remove('hidden');
+
+                renderPage(pageNum);
+                hideLoading();
+            }).catch(function(error) {
+                hideLoading();
+                console.error(error);
+                showMessage("Hata", "PDF dosyası açılırken bir sorun oluştu.", true);
+            });
+        }
+
+        // Sayfa Çizim Motoru
+        function renderPage(num) {
+            pageRendering = true;
+            showLoading("Sayfa Hazırlanıyor...");
+
+            pdfDoc.getPage(num).then(function(page) {
+                const viewport = page.getViewport({ scale: scale });
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+
+                const renderContext = {
+                    canvasContext: ctx,
+                    viewport: viewport
+                };
+
+                const renderTask = page.render(renderContext);
+                renderTask.promise.then(function() {
+                    pageRendering = false;
+                    hideLoading();
+                    if (pageNumPending !== null) {
+                        renderPage(pageNumPending);
+                        pageNumPending = null;
+                    }
+                });
+            });
+
+            document.getElementById('page-num-input').value = num;
+            document.getElementById('zoom-level').textContent = Math.round(scale * 100) + '%';
+            
+            document.getElementById('prev-page').disabled = (num <= 1);
+            document.getElementById('next-page').disabled = (num >= pdfDoc.numPages);
+        }
+
+        function queueRenderPage(num) {
+            if (pageRendering) {
+                pageNumPending = num;
+            } else {
+                renderPage(num);
+            }
+        }
+
+        // Event Dinleyicileri (Dosya Girişleri)
+        document.getElementById('pdf-file-input').addEventListener('change', (e) => handleFile(e.target.files[0]));
+        document.getElementById('pdf-file-input-hero').addEventListener('change', (e) => handleFile(e.target.files[0]));
+
+        // Sayfa Kontrolleri
+        document.getElementById('prev-page').addEventListener('click', () => {
+            if (pageNum <= 1) return;
+            pageNum--;
+            queueRenderPage(pageNum);
+        });
+
+        document.getElementById('next-page').addEventListener('click', () => {
+            if (pageNum >= pdfDoc.numPages) return;
+            pageNum++;
+            queueRenderPage(pageNum);
+        });
+
+        document.getElementById('page-num-input').addEventListener('change', (e) => {
+            let num = parseInt(e.target.value);
+            if (num >= 1 && num <= pdfDoc.numPages) {
+                pageNum = num;
+                queueRenderPage(pageNum);
+            } else {
+                e.target.value = pageNum;
+            }
+        });
+
+        // Yakınlaştırma (Zoom)
+        document.getElementById('zoom-in').addEventListener('click', () => {
+            if (scale >= 3.0) return;
+            scale += 0.25;
+            queueRenderPage(pageNum);
+        });
+
+        document.getElementById('zoom-out').addEventListener('click', () => {
+            if (scale <= 0.6) return;
+            scale -= 0.25;
+            queueRenderPage(pageNum);
+        });
+
+        // Orijinal PDF Dosyasını Paylaşma Özelliği
+        document.getElementById('share-original-pdf').addEventListener('click', async () => {
+            if (!currentFileBytes) return;
+
+            try {
+                const fileName = currentFile ? currentFile.name : "belge.pdf";
+                const file = new File([currentFileBytes], fileName, { type: "application/pdf" });
+                
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        files: [file],
+                        title: 'PDF Belgesi',
+                        text: 'Reklamsız PDF Okuyucu ile paylaşıldı.'
+                    });
+                } else {
+                    downloadBlob(file, fileName);
+                    showMessage("Dosya İndirildi", "Tarayıcınız doğrudan paylaşımı desteklemediği için dosya telefonunuza indirildi.");
+                }
+            } catch (error) {
+                if (error.name !== 'AbortError') {
+                    console.error(error);
+                    showMessage("Paylaşım Hatası", "Dosya paylaşılırken bir hata oluştu.", true);
+                }
+            }
+        });
+
+        // Aktif Sayfayı JPG Formatına Çevirip Paylaşma Özelliği
+        document.getElementById('share-page-jpg').addEventListener('click', async () => {
+            if (!pdfDoc) return;
+
+            showLoading("Sayfa JPG görseline dönüştürülüyor...");
+
+            try {
+                const page = await pdfDoc.getPage(pageNum);
+                const viewport = page.getViewport({ scale: 2.0 }); // Net görünüm için yüksek çözünürlük
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = viewport.width;
+                tempCanvas.height = viewport.height;
+                const tempCtx = tempCanvas.getContext('2d');
+
+                await page.render({ canvasContext: tempCtx, viewport: viewport }).promise;
+
+                tempCanvas.toBlob(async (blob) => {
+                    hideLoading();
+                    const baseName = currentFile ? currentFile.name.replace(/\.[^/.]+$/, "") : "belge";
+                    const fileName = `${baseName}-sayfa-${pageNum}.jpg`;
+                    const file = new File([blob], fileName, { type: "image/jpeg" });
+
+                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                        try {
+                            await navigator.share({
+                                files: [file],
+                                title: `Sayfa ${pageNum} Görseli`,
+                                text: `PDF Sayfa ${pageNum} - WhatsApp / Telegram paylaşımı.`
+                            });
+                        } catch (err) {
+                            if (err.name !== 'AbortError') console.error(err);
+                        }
+                    } else {
+                        downloadBlob(blob, fileName);
+                        showMessage("Görsel Kaydedildi", "Sayfa başarıyla JPG olarak indirildi.");
+                    }
+                }, 'image/jpeg', 0.92);
+
+            } catch (error) {
+                hideLoading();
+                console.error(error);
+                showMessage("Dönüştürme Hatası", "Sayfa görselleştirilemedi.", true);
+            }
+        });
+
+        function downloadBlob(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
